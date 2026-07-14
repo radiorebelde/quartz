@@ -8,6 +8,11 @@
 # - STATICRYPT_PASSWORD : le mot de passe du site (en clair uniquement dans ce secret, jamais ailleurs).
 #
 # Activer aussi Settings > Pages > Source: GitHub Actions sur ce repo.
+#
+# Déclenchement automatique : ce workflow réagit aussi à un événement repository_dispatch de type
+# "roller-club-updated", envoyé par un workflow dédié dans radiorebelde/roller-club à chaque push sur sa
+# branche main (voir .github/workflows/notify-quartz.yml dans ce repo-là). Sans ça, éditer le vault ne
+# redéployait pas le site tout seul — il fallait un push direct sur ce repo Quartz ou un lancement manuel.
 
 name: Deploy Quartz site to GitHub Pages
 
@@ -15,6 +20,8 @@ on:
   push:
     branches:
       - v5
+  repository_dispatch:
+    types: [roller-club-updated]
   workflow_dispatch:
 
 permissions:
