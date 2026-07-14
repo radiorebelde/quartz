@@ -73,7 +73,7 @@ jobs:
 
       - name: Password-protect site (staticrypt)
         run: |
-          npx staticrypt public -r -d public --short -p "${{ secrets.STATICRYPT_PASSWORD }}"
+          npx staticrypt public/* -r -d public --short -p "${{ secrets.STATICRYPT_PASSWORD }}"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
