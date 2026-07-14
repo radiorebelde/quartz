@@ -1,0 +1,94 @@
+# Site de lecture du vault Roller Club, publié via Quartz + GitHub Pages, protégé par mot de passe
+# (staticrypt). Le contenu est tiré du repo privé radiorebelde/roller-club à chaque déploiement (2e
+# checkout ci-dessous, dossier content/) — ce repo Quartz lui-même ne contient jamais les notes.
+#
+# Secrets à créer dans Settings > Secrets and variables > Actions de CE repo (radiorebelde/quartz) :
+# - ROLLER_CONTENT_PAT : token (PAT fin, lecture seule, scopé sur radiorebelde/roller-club) pour le
+#   checkout du contenu privé.
+# - STATICRYPT_PASSWORD : le mot de passe du site (en clair uniquement dans ce secret, jamais ailleurs).
+#
+# Activer aussi Settings > Pages > Source: GitHub Actions sur ce repo.
+
+name: Deploy Quartz site to GitHub Pages
+
+on:
+  push:
+    branches:
+      - v5
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Quartz
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Roller Club content
+        uses: actions/checkout@v6
+        with:
+          repository: radiorebelde/roller-club
+          token: ${{ secrets.ROLLER_CONTENT_PAT }}
+          path: content
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Cache dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Cache Quartz plugins
+        uses: actions/cache@v5
+        with:
+          path: .quartz/plugins
+          key: ${{ runner.os }}-plugins-${{ hashFiles('quartz.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-plugins-
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Quartz plugins
+        run: npx quartz plugin install
+
+      - name: Build Quartz
+        run: npx quartz build
+
+      - name: Password-protect site (staticrypt)
+        run: |
+          npx staticrypt "public/**/*.html" \
+            --password "${{ secrets.STATICRYPT_PASSWORD }}" \
+            --short -d public
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
