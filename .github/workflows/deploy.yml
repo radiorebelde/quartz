@@ -72,8 +72,28 @@ jobs:
         run: npx quartz build
 
       - name: Password-protect site (staticrypt)
+        # Le mot de passe passe par env:, jamais interpolé directement dans le script via ${{ }} : GitHub
+        # Actions substitue la valeur brute du secret dans le texte du script sans l'échapper pour bash, donc
+        # un caractère spécial dans le mot de passe (space, $, ", `, ...) peut casser silencieusement la
+        # commande. staticrypt lit STATICRYPT_PASSWORD depuis l'environnement nativement (voir sa doc), donc
+        # pas besoin du flag -p. La vérification finale fait échouer le build si le chiffrement n'a pas eu
+        # lieu, plutôt que de publier silencieusement le vault en clair.
+        env:
+          STATICRYPT_PASSWORD: ${{ secrets.STATICRYPT_PASSWORD }}
         run: |
-          npx staticrypt public/* -r -d public --short -p "${{ secrets.STATICRYPT_PASSWORD }}"
+          if [ -z "$STATICRYPT_PASSWORD" ]; then
+            echo "::error::Secret STATICRYPT_PASSWORD absent ou vide."
+            exit 1
+          fi
+          echo "Mot de passe lu (longueur : ${#STATICRYPT_PASSWORD} caractères)."
+
+          npx staticrypt public/* -r -d public --short
+
+          if ! grep -q "staticryptEncryptedMsgUniqueVariableName" public/index.html; then
+            echo "::error::staticrypt n'a pas chiffré public/index.html — le site serait publié en clair. Build arrêté."
+            exit 1
+          fi
+          echo "OK : public/index.html est bien chiffré."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
